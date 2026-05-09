@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AquaSmart - Sistema Inteligente de Monitoreo Piscícola</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Scripts -->
+    <script>
+    function toggleMobileMenu() {
+        const menu = document.getElementById('mobileMenu');
+        menu.classList.toggle('open');
+    }
+
+    // Actualiza los contadores de las tarjetas de resumen
+    function actualizarStats() {
+        const data = getData();
+        const cfg  = data.configuracion;
+
+        const total = data.estanques.length;
+
+        // Contar estanques en alerta
+        let enAlerta = 0;
+        data.estanques.forEach(e => {
+            if (
+                e.temperatura < (cfg.tempMin || 0) ||
+                e.temperatura > (cfg.tempMax || 99) ||
+                e.oxigeno     < (cfg.oxigenoMin || 0) ||
+                e.ph          < (cfg.phMin || 0) ||
+                e.transparencia < (cfg.transparenciaMin || 0)
+            ) enAlerta++;
+        });
+
+        const activos = total - enAlerta;
+        // 4 sensores por estanque
+        const sensoresTotal  = total * 4;
+        const sensoresOk     = activos * 4;
+
+        // Estanques activos
+        const elEst = document.getElementById('statEstanques');
+        const elEstLabel = document.getElementById('statEstanquesLabel');
+        if (elEst) elEst.textContent = `${activos}/${total}`;
+        if (elEstLabel) {
+            const pct = total > 0 ? Math.round((activos / total) * 100) : 0;
+            elEstLabel.innerHTML = activos === total
+                ? '<i class="fas fa-arrow-up mr-1"></i>100% operativos'
+                : `<i class="fas fa-exclamation-triangle mr-1"></i>${pct}% operativos`;
+            elEstLabel.className = activos === total
+                ? 'text-xs text-green-600 mt-1'
+                : 'text-xs text-red-600 mt-1';
+        }
+
+        // Sensores online
+        const elSens = document.getElementById('statSensores');
+        if (elSens) elSens.textContent = `${sensoresOk}/${sensoresTotal}`;
+
+        // Alertas activas
+        const elAl = document.getElementById('statAlertas');
+        const elAlLabel = document.getElementById('statAlertasLabel');
+        if (elAl) elAl.textContent = `${enAlerta}`;
+        if (elAlLabel) {
+            elAlLabel.innerHTML = enAlerta > 0
+                ? `<i class="fas fa-exclamation-triangle mr-1"></i>Requieren atención`
+                : `<i class="fas fa-check mr-1"></i>Sin novedades`;
+            elAlLabel.className = enAlerta > 0
+                ? 'text-xs text-red-600 mt-1'
+                : 'text-xs text-green-600 mt-1';
+        }
+    }
+
+    // Estructura inicial de datos
+    const initialData = {
+        estanques: [
+            {
+                id: 'A1', 
+                tipo: 'Tilapia',
+                temperatura: 24.5,
+                ph: 7.2,
+                oxigeno: 8.1,
+                transparencia: 85,
+                biomasa: 320,
+                estado: 'óptimo'
+            },
+            {
+                id: 'B2',
+                tipo: 'Pacú', 
+                temperatura: 18.2,
+                ph: 6.8,
+                oxigeno: 5.8,
+                transparencia: 78,
+                estado: 'alerta'
+            }
+        ],
+        alertas: [],
+        configuracion: {
+            tempMin: 18,
+            tempMax: 28,
+            oxigenoMin: 6,
+            oxigenoMax: 12
+        }
+    };
+
+    // Inicializar datos en localStorage 
+    if (!localStorage.getItem('aquasmartData')) {
+        localStorage.setItem('aquasmartData', JSON.stringify(initialData));
+    }
+
+    // Función para obtener datos
+    function getData() {
+        return JSON.parse(localStorage.getItem('aquasmartData'));
+    }
+
+    // Función para guardar datos  
+    function saveData(data) {
+        localStorage.setItem('aquasmartData', JSON.stringify(data));
+    }
+
+    // Función para crear nuevo estanque
+    function crearNuevoEstanque(event) {
+        event.preventDefault();
+        const nombre = document.getElementById('nombreEstanque').value;
+        const tipo = document.getElementById('tipoPez').value;
+        const capacidad = document.getElementById('capacidadEstanque').value;
+
+        const nuevoEstanque = {
+            id: nombre,
+            tipo: tipo,
+            temperatura: 24.0,
+            ph: 7.0, 
+            oxigeno: 7.0,
+            transparencia: 80,
+            biomasa: 0,
+            estado: 'óptimo',
+            capacidad: capacidad
+        };
+
+        const data = getData();
+        data.estanques.push(nuevoEstanque);
+        saveData(data);
+        closeEstanqueModal();
+        location.reload();
+    }
+
+  
+    function guardarConfiguracionAlertas(event) {
+        event.preventDefault();
+        const tempMin = document.getElementById('tempMin').value;
+        const oxigenoMin = document.getElementById('oxigenoMin').value;
+        const transparenciaMin = document.getElementById('transparenciaMin').value;
+        const phMin = document.getElementById('phMin').value;
+        
+        const data = getData();
+        data.configuracion.tempMin = parseFloat(tempMin);
+        data.configuracion.oxigenoMin = parseFloat(oxigenoMin);
+        data.configuracion.transparenciaMin = parseFloat(transparenciaMin);
+        data.configuracion.phMin = parseFloat(phMin);
+        saveData(data);
+        closeAlertModal();
+        aplicarEstadoEstanques();
+    }
+
+    // Genera la lista de alertas activas según el estado de los estanques
+    // y siempre muestra exactamente 3 ítems (rellena con "Todo en orden" si hay menos)
+    function renderizarAlertas() {
+        const data = getData();
+        const cfg  = data.configuracion;
+        const alertasActivas = [];
+
+        data.estanques.forEach(estanque => {
+            if (estanque.temperatura < (cfg.tempMin || 0) || estanque.temperatura > (cfg.tempMax || 99)) {
+                alertasActivas.push({
+                    tipo: 'critica',
+                    titulo: `Temperatura Crítica - ${estanque.id}`,
+                    detalle: `${estanque.temperatura}°C - fuera de rango para ${estanque.tipo}`,
+                    tiempo: 'Ahora'
+                });
+            }
+            if (estanque.oxigeno < (cfg.oxigenoMin || 0)) {
+                alertasActivas.push({
+                    tipo: 'advertencia',
+                    titulo: `Oxígeno Bajo - ${estanque.id}`,
+                    detalle: `${estanque.oxigeno} mg/L - Nivel preocupante`,
+                    tiempo: 'Ahora'
+                });
+            }
+            if (estanque.ph < (cfg.phMin || 0)) {
+                alertasActivas.push({
+                    tipo: 'advertencia',
+                    titulo: `pH Bajo - ${estanque.id}`,
+                    detalle: `pH ${estanque.ph} - por debajo del mínimo`,
+                    tiempo: 'Ahora'
+                });
+            }
+            if (estanque.transparencia < (cfg.transparenciaMin || 0)) {
+                alertasActivas.push({
+                    tipo: 'advertencia',
+                    titulo: `Transparencia Baja - ${estanque.id}`,
+                    detalle: `${estanque.transparencia}% - por debajo del mínimo`,
+                    tiempo: 'Ahora'
+                });
+            }
+        });
+
+        // Rellenar hasta 3 con ítems "ok" si hay menos alertas
+        while (alertasActivas.length < 3) {
+            alertasActivas.push({ tipo: 'ok' });
+        }
+
+        // Renderizar solo las primeras 3
+        const items = alertasActivas.slice(0, 3);
+        const container = document.getElementById('alertasSistema');
+        const badge     = document.getElementById('alertasBadge');
+        if (!container) return;
+
+        const activas = alertasActivas.filter(a => a.tipo !== 'ok').length;
+        if (badge) badge.textContent = `${activas} Nuevas`;
+
+        container.innerHTML = items.map(alerta => {
+            if (alerta.tipo === 'critica') {
+                return `<div class="flex items-start space-x-3 p-4 bg-red-50 rounded-xl border-l-4 border-red-500">
+                    <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <i class="fas fa-exclamation-triangle text-white text-sm"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-medium text-red-800">${alerta.titulo}</p>
+                        <p class="text-sm text-red-600">${alerta.detalle}</p>
+                        <p class="text-xs text-red-500 mt-1">${alerta.tiempo} • Estanque ${alerta.titulo.split('- ')[1] || ''}</p>
+                    </div>
+                </div>`;
+            }
+            if (alerta.tipo === 'advertencia') {
+                return `<div class="flex items-start space-x-3 p-4 bg-orange-50 rounded-xl border-l-4 border-orange-500">
+                    <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <i class="fas fa-exclamation-circle text-white text-sm"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-medium text-orange-800">${alerta.titulo}</p>
+                        <p class="text-sm text-orange-700">${alerta.detalle}</p>
+                        <p class="text-xs text-orange-600 mt-1">${alerta.tiempo} • Estanque ${alerta.titulo.split('- ')[1] || ''}</p>
+                    </div>
+                </div>`;
+            }
+            // tipo 'ok' — todo en orden
+            return `<div class="flex items-start space-x-3 p-4 bg-green-50 rounded-xl border-l-4 border-green-500">
+                <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <i class="fas fa-check text-white text-sm"></i>
+                </div>
+                <div class="flex-1">
+                    <p class="font-medium text-green-800">Todo en orden</p>
+                    <p class="text-sm text-green-600">Todos los parámetros dentro del rango</p>
+                    <p class="text-xs text-green-500 mt-1">Sin novedades</p>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // Función para resolver alerta
+    function resolverAlerta(id) {
+        const data = getData();
+        data.alertas = data.alertas.filter(alerta => alerta.id !== id);
+        saveData(data);
+        location.reload();
+    }
+
+    // Evalúa cada estanque contra la configuración y actualiza la visualización
+    function aplicarEstadoEstanques() {
+        const data = getData();
+        const cfg = data.configuracion;
+
+        data.estanques.forEach(estanque => {
+            const enAlerta =
+                estanque.temperatura < (cfg.tempMin || 0) ||
+                estanque.temperatura > (cfg.tempMax || 99) ||
+                estanque.oxigeno     < (cfg.oxigenoMin || 0) ||
+                estanque.ph          < (cfg.phMin || 0) ||
+                estanque.transparencia < (cfg.transparenciaMin || 0);
+
+            estanque.estado = enAlerta ? 'alerta' : 'óptimo';
+
+            const tarjetas = document.querySelectorAll('.glass-card.rounded-2xl.p-6');
+            tarjetas.forEach(tarjeta => {
+                const titulo = tarjeta.querySelector('h3');
+                if (!titulo || !titulo.textContent.includes(estanque.id)) return;
+
+                const badge = tarjeta.querySelector('span.rounded-full');
+                const dot   = tarjeta.querySelector('.w-3.h-3.rounded-full');
+
+                if (enAlerta) {
+                    tarjeta.classList.add('border-2', 'border-red-200', 'alert-pulse');
+                    tarjeta.classList.remove('border-green-200');
+                    if (badge) {
+                        badge.textContent = '¡Atención Requerida!';
+                        badge.className = 'px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium';
+                    }
+                    if (dot) { dot.classList.remove('bg-green-500'); dot.classList.add('bg-red-500'); }
+                } else {
+                    tarjeta.classList.remove('border-2', 'border-red-200', 'alert-pulse');
+                    if (badge) {
+                        badge.textContent = 'Óptimo';
+                        badge.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium';
+                    }
+                    if (dot) { dot.classList.remove('bg-red-500'); dot.classList.add('bg-green-500'); }
+                }
+
+                tarjeta.querySelectorAll('.sensor-card').forEach(card => {
+                    const label = card.querySelector('span.text-sm')?.textContent?.trim() || '';
+                    let fuera = false;
+                    if (label.includes('Temperatura'))  fuera = estanque.temperatura  < (cfg.tempMin || 0) || estanque.temperatura > (cfg.tempMax || 99);
+                    else if (label.includes('pH'))       fuera = estanque.ph          < (cfg.phMin || 0);
+                    else if (label.includes('Oxígeno'))  fuera = estanque.oxigeno     < (cfg.oxigenoMin || 0);
+                    else if (label.includes('Transparencia')) fuera = estanque.transparencia < (cfg.transparenciaMin || 0);
+
+                    const statusText = card.querySelector('p.text-xs');
+                    if (fuera) {
+                        card.classList.add('border-2', 'border-red-300');
+                        if (statusText) {
+                            statusText.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Fuera de rango';
+                            statusText.className = 'text-xs text-red-600 mt-1';
+                        }
+                    } else {
+                        card.classList.remove('border-red-300');
+                        if (statusText && statusText.textContent.includes('Fuera de rango')) {
+                            statusText.innerHTML = 'Dentro de rango';
+                            statusText.className = 'text-xs text-green-600 mt-1';
+                        }
+                    }
+                });
+            });
+        });
+
+        saveData(data);
+        renderizarAlertas();
+        actualizarStats();
+    }
+
+function mostrarEstanques() {
+    const modal = document.getElementById('verEstanquesModal');
+    const container = document.getElementById('estanquesList');
+    container.innerHTML = ''; 
+
+    const data = getData();
+
+    if(data.estanques.length === 0){
+        container.innerHTML = '<p class="text-gray-600">No hay estanques registrados.</p>';
+    } else {
+        data.estanques.forEach(estanque => {
+            const div = document.createElement('div');
+            div.className = 'glass-card p-4 rounded-xl border border-gray-200 flex justify-between items-center';
+            div.innerHTML = `
+                <div>
+                    <p class="font-bold text-gray-900">${estanque.id} - ${estanque.tipo}</p>
+                    <p class="text-sm text-gray-600">Temperatura: ${estanque.temperatura}°C | pH: ${estanque.ph} | Oxígeno: ${estanque.oxigeno} mg/L | Transparencia: ${estanque.transparencia}%</p>
+                </div>
+                <span class="px-2 py-1 text-sm rounded-full ${estanque.estado === 'óptimo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${estanque.estado}</span>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeVerEstanquesModal() {
+    document.getElementById('verEstanquesModal').classList.add('hidden');
+}
+    </script>
+    <style>
+        :root {
+            --primary: #059669;
+            --primary-dark: #047857;
+            --primary-light: #10b981;
+            --secondary: #0ea5e9;
+            --accent: #f59e0b;
+            --danger: #dc2626;
+            --success: #16a34a;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(5, 150, 105, 0.1);
+        }
+        
+        .sensor-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .sensor-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: left 0.5s;
+        }
+        
+        .sensor-card:hover::before {
+            left: 100%;
+        }
+        
+        .sensor-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(5, 150, 105, 0.15);
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+        
+        .alert-pulse {
+            animation: alertPulse 2s infinite;
+        }
+        
+        @keyframes alertPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .nav-item {
+            position: relative;
+            transition: all 0.3s;
+        }
+        
+        .nav-item::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            width: 0;
+            height: 2px;
+            background: var(--primary);
+            transition: all 0.3s;
+            transform: translateX(-50%);
+        }
+        
+        .nav-item.active::after,
+        .nav-item:hover::after {
+            width: 100%;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            background: #e5e7eb;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        
+        .floating-action {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        
+        .water-effect {
+            background: linear-gradient(180deg, 
+                rgba(14, 165, 233, 0.1) 0%, 
+                rgba(5, 150, 105, 0.05) 50%, 
+                transparent 100%);
+        }
+
+        /* ── Responsive fixes ── */
+
+        /* Menú mobile */
+        #mobileMenu {
+            display: none;
+            flex-direction: column;
+            gap: 0;
+        }
+        #mobileMenu.open {
+            display: flex;
+        }
+        #mobileMenu a {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            color: #374151;
+            font-size: 0.95rem;
+        }
+
+        /* Tarjeta predicción: arreglar el div flotante suelto */
+        .prediccion-card {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        /* Sensor cards: 1 columna en móvil */
+        @media (max-width: 640px) {
+            .sensor-grid {
+                grid-template-columns: 1fr !important;
+            }
+            /* Texto grande de valores: reducir en móvil */
+            .sensor-card p.text-2xl {
+                font-size: 1.25rem;
+            }
+            /* Header: ocultar "Conectado" en móvil muy pequeño */
+            .status-label {
+                display: none;
+            }
+            /* Título bienvenida */
+            main > div > h2 {
+                font-size: 1.5rem;
+            }
+            /* Padding del main */
+            main {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            /* Modal más estrecho */
+            .glass-card.rounded-2xl.p-8 {
+                padding: 1.25rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            /* Grid de stats: 2 columnas en tablet/móvil */
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+   
+    <header class="glass-card sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-green-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <i class="fas fa-fish text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold gradient-text">AquaSmart</h1>
+                        <p class="text-xs text-gray-500">Monitoreo Inteligente</p>
+                    </div>
+                </div>
+                
+                
+                <nav class="hidden md:flex items-center space-x-8">
+                    <a href="#" class="nav-item active text-gray-700 font-medium">Inicio</a>
+                   
+                     <a href="#" id="btnEstanques" onclick="mostrarEstanques()" class="nav-item text-gray-500 hover:text-gray-700">Estanques</a>
+
+
+                    <a href="#" class="nav-item text-gray-500 hover:text-gray-700" onclick="generarReporte()"> Generar Reporte</a>
+
+                    <script>
+                    function generarReporte() {
+                        const data = getData();
+                        let reporteHTML = `
+                            <h2>Reporte de Estanques</h2>
+                            <h3>Fecha: ${new Date().toLocaleDateString()}</h3>
+                            <hr>
+                        `;
+
+                        data.estanques.forEach(estanque => {
+                            reporteHTML += `
+                                <h4>Estanque ${estanque.id} - ${estanque.tipo}</h4>
+                                <p>Temperatura: ${estanque.temperatura}°C</p>
+                                <p>pH: ${estanque.ph}</p>
+                                <p>Oxígeno: ${estanque.oxigeno} mg/L</p>
+                                <p>Transparencia: ${estanque.transparencia}%</p>
+                                <p>Estado: ${estanque.estado}</p>
+                                <hr>
+                            `;
+                        });
+
+                       
+                        const ventanaImpresion = window.open('', '_blank');
+                        ventanaImpresion.document.write(`
+                            <html>
+                                <head>
+                                    <title>Reporte AquaSmart</title>
+                                    <style>
+                                        body { font-family: Arial; padding: 20px; }
+                                        h2 { color: #059669; }
+                                        hr { margin: 20px 0; }
+                                    </style>
+                                </head>
+                                <body>
+                                    ${reporteHTML}
+                                </body>
+                            </html>
+                        `);
+                        ventanaImpresion.document.close();
+                        ventanaImpresion.print();
+                    }
+                    </script>
+                    <a href="#" class="nav-item text-gray-500 hover:text-gray-700" onclick="openFontSizeModal()">Configuración de Fuente</a>
+                    
+                    <!-- Modal de Tamaño de Fuente -->
+                    <div id="fontSizeModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden" style="margin-top: 100px;">
+                        <div class="glass-card rounded-2xl p-8 max-w-md w-full relative">
+                            <button onclick="closeFontSizeModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+                            <h2 class="text-2xl font-bold mb-4 text-gray-900">Tamaño de Fuente</h2>
+                            <div class="space-y-4">
+                                <button onclick="changeFontSize('small')" class="w-full p-3 bg-gray-100 hover:bg-gray-200 rounded-lg text-left text-sm">
+                                    Pequeño (90%)
+                                </button>
+                                <button onclick="changeFontSize('normal')" class="w-full p-3 bg-gray-100 hover:bg-gray-200 rounded-lg text-left text-base">
+                                    Normal (100%)
+                                </button>
+                                <button onclick="changeFontSize('large')" class="w-full p-3 bg-gray-100 hover:bg-gray-200 rounded-lg text-left text-lg">
+                                    Grande (120%)
+                                </button>
+                                <button onclick="changeFontSize('xlarge')" class="w-full p-3 bg-gray-100 hover:bg-gray-200 rounded-lg text-left text-xl">
+                                    Muy Grande (140%)
+                                </button>
+                            </div>
+                            <div class="mt-6 flex justify-end">
+                                <button onclick="closeFontSizeModal()" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-medium">Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                        function openFontSizeModal() {
+                            document.getElementById('fontSizeModal').classList.remove('hidden');
+                        }
+
+                        function closeFontSizeModal() {
+                            document.getElementById('fontSizeModal').classList.add('hidden');
+                        }
+
+                        function changeFontSize(size) {
+                            const body = document.body;
+                            switch(size) {
+                                case 'small':
+                                    body.style.fontSize = '90%';
+                                    break;
+                                case 'normal':
+                                    body.style.fontSize = '100%';
+                                    break;
+                                case 'large':
+                                    body.style.fontSize = '120%';
+                                    break;
+                                case 'xlarge':
+                                    body.style.fontSize = '140%';
+                                    break;
+                            }
+                            // Guardar preferencia en localStorage
+                            localStorage.setItem('preferredFontSize', size);
+                            closeFontSizeModal();
+                        }
+
+                        // Cargar preferencia guardada al cargar la página
+                        window.addEventListener('load', function() {
+                            const savedSize = localStorage.getItem('preferredFontSize');
+                            if (savedSize) {
+                                changeFontSize(savedSize);
+                            }
+                            aplicarEstadoEstanques();
+                            renderizarAlertas();
+                            actualizarStats();
+                        });
+                    </script>
+                </nav>
+                
+               
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <div class="status-dot bg-green-500"></div>
+                        <span class="text-sm text-gray-600 status-label">Conectado</span>
+                    </div>
+                    <div class="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-400 rounded-full flex items-center justify-center text-white font-semibold cursor-pointer">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <!-- Botón hamburguesa solo en mobile -->
+                    <button class="md:hidden flex items-center justify-center w-9 h-9 rounded-lg bg-gray-100 hover:bg-gray-200" onclick="toggleMobileMenu()">
+                        <i class="fas fa-bars text-gray-600"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Menú mobile desplegable -->
+        <div id="mobileMenu" class="md:hidden glass-card border-t border-gray-100">
+            <a href="#" onclick="toggleMobileMenu()">Inicio</a>
+            <a href="#" onclick="mostrarEstanques(); toggleMobileMenu()">Estanques</a>
+            <a href="#" onclick="generarReporte(); toggleMobileMenu()">Generar Reporte</a>
+            <a href="#" onclick="openFontSizeModal(); toggleMobileMenu()">Configuración de Fuente</a>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold text-gray-900 mb-2">Bienvenido de vuelta, <span class="gradient-text">piscícultor</span></h2>
+            <p class="text-gray-600">Monitoreo en tiempo real de tus estanques piscícolas</p>
+        </div>
+
+
+        <div class="stats-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+         
+            <div class="glass-card rounded-2xl p-6 water-effect">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Estanques Activos</p>
+                        <p class="text-2xl font-bold text-gray-900" id="statEstanques">8/8</p>
+                        <p class="text-xs text-green-600 mt-1" id="statEstanquesLabel"><i class="fas fa-arrow-up mr-1"></i>100% operativos</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-water text-green-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            
+        
+            <div class="glass-card rounded-2xl p-6 water-effect">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Sensores Online</p>
+                        <p class="text-2xl font-bold text-gray-900" id="statSensores">32/32</p>
+                        <p class="text-xs text-green-600 mt-1"><i class="fas fa-check mr-1"></i>Todos conectados</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-microchip text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            
+            
+            <div class="glass-card rounded-2xl p-6 water-effect">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Alertas Activas</p>
+                        <p class="text-2xl font-bold text-gray-900" id="statAlertas">0</p>
+                        <p class="text-xs mt-1" id="statAlertasLabel"><i class="fas fa-check mr-1"></i>Sin novedades</p>
+                    </div>
+                    <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-bell text-red-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tarjeta Predicción de Crecimiento -->
+            <div class="glass-card rounded-2xl p-6 water-effect">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-600">Predicción de Crecimiento</p>
+                        <p class="text-2xl font-bold text-purple-900" id="gradosDia">0°C</p>
+                        <p class="text-xs text-purple-600 mt-1">
+                            <i class="fas fa-thermometer-half mr-1"></i>
+                            Promedio: <span id="tempPromedio">0°C</span>
+                        </p>
+                        <div class="mt-2 space-y-1">
+                            <p class="text-xs text-purple-600">
+                                <i class="fas fa-fish mr-1"></i>
+                                Cosecha: <span id="diasCosecha">--</span>
+                            </p>
+                            <p class="text-xs text-purple-600">
+                                <i class="fas fa-weight-scale mr-1"></i>
+                                Peso: <span id="pesoEstimado">--</span>
+                            </p>
+                            <p class="text-xs text-green-600" id="listoParaCosecha">
+                                <i class="fas fa-clock mr-1"></i>
+                                Ningún pez listo
+                            </p>
+                        </div>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0 ml-3">
+                        <i class="fas fa-seedling text-purple-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+         
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Estanque A1 -->
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <h3 class="text-xl font-bold text-gray-900">Estanque A1 - Tilapia</h3>
+                        </div>
+                        <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">Óptimo</span>
+                    </div>
+                    
+                    <div class="sensor-grid grid grid-cols-2 gap-4 mb-6">
+                        <!-- Temperatura -->
+                        <div class="sensor-card bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-thermometer-half text-blue-600"></i>
+                                    <span class="text-sm font-medium text-blue-800">Temperatura</span>
+                                </div>
+                                <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">24.5°</span>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-blue-900 mb-2">24.5°C</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill bg-blue-500" style="width: 75%"></div>
+                            </div>
+                            <p class="text-xs text-blue-600 mt-1">Rango: 20-28°C</p>
+                        </div>
+                        
+                        <!-- pH -->
+                        <div class="sensor-card bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-vial text-green-600"></i>
+                                    <span class="text-sm font-medium text-green-800">Nivel de pH</span>
+                                </div>
+                                <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">7.2</span>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-green-900 mb-2">7.2</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill bg-green-500" style="width: 85%"></div>
+                            </div>
+                            <p class="text-xs text-green-600 mt-1">Rango: 6.5-8.0</p>
+                        </div>
+                        
+         
+                        <div class="sensor-card bg-gradient-to-br from-cyan-50 to-cyan-100 p-4 rounded-xl border border-cyan-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-wind text-cyan-600"></i>
+                                    <span class="text-sm font-medium text-cyan-800">Oxígeno</span>
+                                </div>
+                                <div class="w-8 h-8 bg-cyan-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">8.1</span>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-cyan-900 mb-2">8.1 mg/L</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill bg-cyan-500" style="width: 90%"></div>
+                            </div>
+                            <p class="text-xs text-cyan-600 mt-1">Rango: 6.0-12.0 mg/L</p>
+                        </div>
+                        
+                  
+                        <div class="sensor-card bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl border border-amber-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-eye text-amber-600"></i>
+                                    <span class="text-sm font-medium text-amber-800">Transparencia</span>
+                                </div>
+                                <div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">85%</span>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-amber-900 mb-2">85%</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill bg-amber-500" style="width: 85%"></div>
+                            </div>
+                            <p class="text-xs text-amber-600 mt-1">Rango: 70-95%</p>
+                        </div>
+                    </div>
+                    
+                  
+                    
+                </div>
+
+                <!-- Estanque B2 con Alerta -->
+                <div class="glass-card rounded-2xl p-6 border-2 border-red-200 alert-pulse">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <h3 class="text-xl font-bold text-gray-900">Estanque B2 - Pacú</h3>
+                        </div>
+                        <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium">¡Atención Requerida!</span>
+                    </div>
+                    
+                    <div class="sensor-grid grid grid-cols-2 gap-4 mb-6">
+                     
+                        <div class="sensor-card bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-xl border-2 border-red-300">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-thermometer-half text-red-600"></i>
+                                    <span class="text-sm font-medium text-red-800">Temperatura</span>
+                                </div>
+                                <div class="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">18.2°</span>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-red-900 mb-2">18.2°C</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill bg-red-500" style="width: 45%"></div>
+                            </div>
+                            <p class="text-xs text-red-600 mt-1"><i class="fas fa-exclamation-triangle mr-1"></i>Fuera de rango</p>
+                        </div>
+                        
+                        <!-- pH Normal -->
+                        <div class="sensor-card bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl border border-green-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-vial text-green-600"></i>
+                                    <span class="text-sm font-medium text-green-800">Nivel de pH</span>
+                                </div>
+                                <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">6.8</span>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-green-900 mb-2">6.8</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill bg-green-500" style="width: 80%"></div>
+                            </div>
+                            <p class="text-xs text-green-600 mt-1">Dentro de rango</p>
+                        </div>
+                        
+                     
+                        <div class="sensor-card bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl border-2 border-orange-300">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-wind text-orange-600"></i>
+                                    <span class="text-sm font-medium text-orange-800">Oxígeno</span>
+                                </div>
+                                <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">5.8</span>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-orange-900 mb-2">5.8 mg/L</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill bg-orange-500" style="width: 60%"></div>
+                            </div>
+                            <p class="text-xs text-orange-600 mt-1"><i class="fas fa-exclamation-circle mr-1"></i>Nivel bajo</p>
+                        </div>
+                        
+                      
+                        <div class="sensor-card bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl border border-amber-200">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-eye text-amber-600"></i>
+                                    <span class="text-sm font-medium text-amber-800">Transparencia</span>
+                                </div>
+                                <div class="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
+                                    <span class="text-white text-xs font-bold">78%</span>
+                                </div>
+                            </div>
+                            <p class="text-2xl font-bold text-amber-900 mb-2">78%</p>
+                            <div class="progress-bar">
+                                <div class="progress-fill bg-amber-500" style="width: 78%"></div>
+                            </div>
+                            <p class="text-xs text-amber-600 mt-1">Dentro de rango</p>
+                        </div>
+                    </div>
+                    
+                  
+                    <div class="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-red-700">Acciones Recomendadas</p>
+                                <p class="text-sm text-red-600">Aumentar temperatura y oxigenación del agua</p>
+                            </div>
+                           
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+           
+                <div class="glass-card rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold text-gray-900">Alertas del Sistema</h3>
+                        <span id="alertasBadge" class="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-medium">0 Nuevas</span>
+                    </div>
+                    <div id="alertasSistema" class="space-y-4"></div>
+                </div>
+
+               
+        
+                <div class="glass-card rounded-2xl p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-6">Acciones Rápidas</h3>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="openEstanqueModal()" class="p-3 bg-green-100 hover:bg-green-200 rounded-lg transition-colors text-center">
+                            <i class="fas fa-plus text-green-600 text-lg mb-1"></i>
+                            <p class="text-sm font-medium text-green-800">Nuevo Estanque</p>
+                        </button>
+
+                        <!-- Modal de Nuevo Estanque -->
+                        <div id="estanqueModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+                            <div class="glass-card rounded-2xl p-8 max-w-md w-full relative">
+                                <button onclick="closeEstanqueModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+                                <h2 class="text-2xl font-bold mb-4 text-gray-900">Nuevo Estanque</h2>
+                                <p class="text-gray-600 mb-6">Configure los parámetros iniciales del estanque.</p>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Nombre del Estanque</label>
+                                        <input type="text" id="nombreEstanque" class="w-full border rounded-lg px-3 py-2" placeholder="Ej: A1">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Pez</label>
+                                        <select id="tipoPez" class="w-full border rounded-lg px-3 py-2">
+                                            <option>Tilapia</option>
+                                            <option>Pacú</option>
+                                            <option>Carpa</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Capacidad (m³)</label>
+                                        <input type="number" id="capacidadEstanque" class="w-full border rounded-lg px-3 py-2" placeholder="100">
+                                    </div>
+                                </div>
+                                <div class="mt-6 flex space-x-4">
+                                    <button onclick="crearNuevoEstanque(event)" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium">Crear Estanque</button>
+                                    <button onclick="closeEstanqueModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-medium">Cancelar</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <script>
+                        function openEstanqueModal() {
+                            document.getElementById('estanqueModal').classList.remove('hidden');
+                        }
+                        function closeEstanqueModal() {
+                            document.getElementById('estanqueModal').classList.add('hidden');
+                        }
+                        </script>
+                        
+                        
+                        
+                        <button onclick="openAlertModal()" class="p-3 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors text-center">
+                            <i class="fas fa-bell text-purple-600 text-lg mb-1"></i>
+                            <p class="text-sm font-medium text-purple-800">Config Alertas</p>
+                        </button>
+
+                        <!-- Modal de Alertas -->
+                        <div id="alertModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+                            <div class="glass-card rounded-2xl p-8 max-w-md w-full relative">
+                                <button onclick="closeAlertModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+                                <h2 class="text-2xl font-bold mb-4 text-gray-900">Configuración de Alertas</h2>
+                                <p class="text-gray-600 mb-6">Aquí puedes configurar los límites para cada parámetro de los sensores.</p>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Temperatura mínima</label>
+                                        <input type="number" id="tempMin" class="w-full border rounded-lg px-3 py-2" value="18">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Oxígeno mínimo</label>
+                                        <input type="number" id="oxigenoMin" class="w-full border rounded-lg px-3 py-2" value="6">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Transparencia mínima</label>
+                                        <input type="number" id="transparenciaMin" class="w-full border rounded-lg px-3 py-2" value="70">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">pH mínimo</label>
+                                        <input type="number" id="phMin" class="w-full border rounded-lg px-3 py-2" value="6.5">
+                                    </div>
+                                </div>
+                                <div class="mt-6 flex space-x-4">
+                                    <button onclick="guardarConfiguracionAlertas(event)" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium">Guardar Cambios</button>
+                                    <button onclick="closeAlertModal()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg font-medium">Cerrar</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <script>
+                        function openAlertModal() {
+                            const cfg = getData().configuracion;
+                            document.getElementById('tempMin').value          = cfg.tempMin          !== undefined ? cfg.tempMin          : 18;
+                            document.getElementById('oxigenoMin').value       = cfg.oxigenoMin       !== undefined ? cfg.oxigenoMin       : 6;
+                            document.getElementById('transparenciaMin').value = cfg.transparenciaMin !== undefined ? cfg.transparenciaMin : 70;
+                            document.getElementById('phMin').value            = cfg.phMin            !== undefined ? cfg.phMin            : 6.5;
+                            document.getElementById('alertModal').classList.remove('hidden');
+                        }
+                        function closeAlertModal() {
+                            document.getElementById('alertModal').classList.add('hidden');
+                        }
+                        </script>
+                        
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+ 
+    
+    <script>
+        // Parámetros de crecimiento por especie
+        const parametrosCrecimiento = {
+            'Tilapia': { tempBase: 15, gradosDiaCosecha: 800, tasaCrecimiento: 0.8, pesoObjetivo: 500 },
+            'Pacú':    { tempBase: 5,  gradosDiaCosecha: 1000, tasaCrecimiento: 0.6, pesoObjetivo: 400 }
+        };
+
+        let pecesListos = new Set();
+
+        function calcularYMostrarPredicciones() {
+            const data = getData();
+            pecesListos.clear();
+
+            // Calcular promedio de temperaturas entre todos los estanques
+            const temps = data.estanques.map(e => e.temperatura);
+            const promedio = temps.reduce((a, b) => a + b, 0) / temps.length;
+
+            // Usar el primer estanque como referencia para los parámetros
+            const estanciaRef = data.estanques[0];
+            if (!estanciaRef) return;
+            const tipo = estanciaRef.tipo;
+            const params = parametrosCrecimiento[tipo] || parametrosCrecimiento['Tilapia'];
+
+            const gradosDiaDiarios = Math.max(0, promedio - params.tempBase);
+            const gradosDiaAcumulados = gradosDiaDiarios; // valor del día actual, sin acumular entre llamadas
+            const diasRestantes = gradosDiaDiarios > 0
+                ? Math.ceil(params.gradosDiaCosecha / gradosDiaDiarios)
+                : '--';
+            const pesoActual = gradosDiaAcumulados * params.tasaCrecimiento;
+
+            document.getElementById('tempPromedio').textContent   = `${promedio.toFixed(1)}°C`;
+            document.getElementById('gradosDia').textContent      = `${gradosDiaAcumulados.toFixed(1)}°C`;
+            document.getElementById('diasCosecha').textContent    = diasRestantes !== '--' ? `${diasRestantes} días` : '--';
+            document.getElementById('pesoEstimado').textContent   = `${pesoActual.toFixed(0)}g`;
+
+            // Verificar cosecha
+            data.estanques.forEach(estanque => {
+                const p = parametrosCrecimiento[estanque.tipo] || parametrosCrecimiento['Tilapia'];
+                const gdd = Math.max(0, estanque.temperatura - p.tempBase);
+                const peso = gdd * p.tasaCrecimiento;
+                if (peso >= p.pesoObjetivo) pecesListos.add(estanque.tipo);
+            });
+
+            const el = document.getElementById('listoParaCosecha');
+            if (el) {
+                const lista = Array.from(pecesListos);
+                el.innerHTML = lista.length > 0
+                    ? `<i class="fas fa-check-circle mr-1"></i>Peces listos: ${lista.join(', ')}`
+                    : `<i class="fas fa-clock mr-1"></i>Ningún pez listo para cosechar`;
+            }
+        }
+
+        // Ejecutar una sola vez al cargar y luego cada hora
+        window.addEventListener('load', function() {
+            calcularYMostrarPredicciones();
+            setInterval(calcularYMostrarPredicciones, 3600000);
+        });
+    </script>
+
+    <div id="verEstanquesModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+        <div class="glass-card rounded-2xl p-8 max-w-3xl w-full relative">
+            <button onclick="closeVerEstanquesModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-xl">&times;</button>
+            <h2 class="text-2xl font-bold mb-4 text-gray-900">Estanques Registrados</h2>
+            <div id="estanquesList" class="space-y-4 max-h-[60vh] overflow-y-auto">
+            
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeVerEstanquesModal()" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-medium">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
