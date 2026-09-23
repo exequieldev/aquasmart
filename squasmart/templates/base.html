@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AquaSmart{% endblock %}</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        body {
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased">
+
+    <!-- Barra de Navegación -->
+    <nav class="glass-card shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                
+                <!-- Logo -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-tr from-blue-600 to-green-500 rounded-xl flex items-center justify-center shadow-md">
+                        <i class="fas fa-water text-white text-lg"></i>
+                    </div>
+                    <span class="text-xl font-bold bg-gradient-to-r from-blue-700 to-green-600 bg-clip-text text-transparent">
+                        AquaSmart
+                    </span>
+                </div>
+
+                <!-- Enlaces del menú -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="{% url 'boyas_home' %}" class="text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                        <i class="fas fa-broadcast-tower mr-1 text-blue-500"></i> Boyas
+                    </a>
+                </div>
+
+                <!-- Estado del Usuario / Auth -->
+                <div class="flex items-center space-x-4">
+                    {% if user.is_authenticated %}
+                        <span class="text-sm font-medium text-gray-700">
+                            <i class="fas fa-user-circle mr-1 text-green-600 text-base"></i> {{ user.username }}
+                        </span>
+                        
+                        <form action="{% url 'logout' %}" method="post" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" 
+                                class="text-sm text-red-600 hover:text-red-800 font-semibold transition-colors flex items-center">
+                                <i class="fas fa-sign-out-alt mr-1"></i> Cerrar sesión
+                            </button>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'login' %}" 
+                           class="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition-colors shadow">
+                           Iniciar Sesión
+                        </a>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+    </nav>
+
+    <!-- Contenido Principal -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}
+        {% endblock %}
+    </main>
+
+</body>
+</html>
