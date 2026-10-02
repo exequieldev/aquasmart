@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitoreo de Boya LoRa</title>
+    <style>
+        body { font-family: Arial; text-align: center; background: #eef2f3; margin-top: 50px; }
+        .card { background: white; padding: 25px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 320px; }
+        .val { font-size: 18px; margin: 12px 0; background: #f8f9fa; padding: 10px; border-radius: 5px; color: #0077b6; }
+        .error { color: #d90429; font-weight: bold; }
+    </style>
+    <!-- Recarga la página automáticamente cada 3 segundos para refrescar los datos de la boya -->
+    <meta http-equiv='refresh' content='3'>
+</head>
+<body>
+    <div class="card">
+        <h2>Panel Django - Boya LoRa</h2>
+        {% if boya.error %}
+            <p class="error">{{ boya.error }}</p>
+        {% else %}
+            <div class="val"><b>Temperatura:</b> {{ boya.t }} &deg;C</div>
+            <div class="val"><b>pH:</b> {{ boya.ph }}</div>
+            <div class="val"><b>Turbidez:</b> {{ boya.tur }} NTU</div>
+            <div class="val"><b>Oxígeno:</b> {{ boya.ox }} mg/L</div>
+        {% endif %}
+    </div>
+</body>
+</html>

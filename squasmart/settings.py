@@ -25,17 +25,17 @@ SECRET_KEY = 'django-insecure-sg(pek3tye&=5*0#p1tj5_o$3e37oc#(be1mlxf&ev0@tw2btx
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = []
 
-# ALLOWED_HOSTS = [
-#     'claudie-unsubsided-sabrina.ngrok-free.dev',
-#     'localhost',
-#     '127.0.0.1',
-# ]
+ALLOWED_HOSTS = [
+    'claudie-unsubsided-sabrina.ngrok-free.dev',
+    'localhost',
+    '127.0.0.1',
+]
 
-# CSRF_TRUSTED_ORIGINS = [
-#     'https://claudie-unsubsided-sabrina.ngrok-free.dev',
-# ]
+CSRF_TRUSTED_ORIGINS = [
+    'https://claudie-unsubsided-sabrina.ngrok-free.dev',
+]
 
 
 # Application definition

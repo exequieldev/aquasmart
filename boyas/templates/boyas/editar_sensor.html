@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}AquaSmart - Editar Sensor{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto mt-10">
+    <div class="glass-card rounded-2xl p-8 shadow-md border border-white/40">
+        
+        <!-- Encabezado -->
+        <div class="text-center mb-6">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100 text-blue-600 mb-3 shadow-inner">
+                <i class="fas fa-microchip text-xl"></i>
+            </div>
+            <h1 class="text-xl font-bold text-gray-900">Editar Rangos del Sensor</h1>
+            <p class="text-xs text-gray-500 mt-1">Modifica los límites mínimos y máximos para las alertas</p>
+        </div>
+
+        <!-- Formulario -->
+        <form method="POST" class="space-y-5">
+            {% csrf_token %}
+
+            <!-- Campo Boya (Bloqueado o Editable según tu lógica, aquí se muestra estándar) -->
+            <div>
+                <label for="{{ form.boya.id_for_label }}" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Boya
+                </label>
+                {{ form.boya }}
+                {% if form.boya.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.boya.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Campo Tipo de Sensor -->
+            <div>
+                <label for="{{ form.tipo.id_for_label }}" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                    Tipo de Sensor
+                </label>
+                {{ form.tipo }}
+                {% if form.tipo.errors %}
+                    <p class="text-red-500 text-xs mt-1">{{ form.tipo.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Nuevos Campos: Rango Mínimo y Rango Máximo -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.rango_min.id_for_label }}" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                        Rango Mínimo
+                    </label>
+                    {{ form.rango_min }}
+                    {% if form.rango_min.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.rango_min.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.rango_max.id_for_label }}" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
+                        Rango Máximo
+                    </label>
+                    {{ form.rango_max }}
+                    {% if form.rango_max.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.rango_max.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Errores generales del formulario -->
+            {% if form.non_field_errors %}
+                <div class="bg-red-50 border-l-4 border-red-500 p-3 text-red-700 text-xs rounded">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+            <!-- Botones de Acción -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200/50">
+                <a href="{% url 'panel_boyas' %}" 
+                   class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">
+                    Cancelar
+                </a>
+                <button type="submit" 
+                        class="px-5 py-2 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow transition-all flex items-center gap-2">
+                    <i class="fas fa-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </form>
+
+    </div>
+</div>
+
+<!-- Script opcional para asegurar clases de Tailwind si tus widgets de Django no las traen por defecto -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const inputs = document.querySelectorAll('input, select');
+    inputs.forEach(input => {
+        if (!input.classList.contains('form-control') && !input.classList.contains('w-full')) {
+            input.classList.add('w-full', 'px-3', 'py-2', 'bg-white', 'border', 'border-gray-300', 'rounded-xl', 'text-sm', 'focus:outline-none', 'focus:ring-2', 'focus:ring-blue-500', 'focus:border-transparent');
+        }
+    });
+});
+</script>
+{% endblock %}

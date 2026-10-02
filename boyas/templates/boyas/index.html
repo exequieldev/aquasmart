@@ -15,7 +15,7 @@
             <i class="fas fa-microchip mr-1"></i> Nuevo Sensor
         </a>
         <a href="{% url 'crear_boya' %}" 
-           class="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold px-4 py-2 rounded-lg shadow transition-all">
+           class="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow transition-all">
             <i class="fas fa-plus mr-1"></i> Nueva Boya
         </a>
     </div>
@@ -25,7 +25,7 @@
 <!-- Boyas apiladas una debajo de la otra -->
 <div class="flex flex-col space-y-6">
     {% for boya in boyas %}
-    <div class="glass-card rounded-2xl p-6 shadow-md border border-white/40 flex flex-col justify-between">
+    <div class="glass-card rounded-2xl p-6 shadow-md border border-white/40 flex flex-col justify-between" data-boya-id="{{ boya.pk }}">
         <div>
             <div class="flex justify-between items-start mb-4">
                 <div>
@@ -37,142 +37,80 @@
                 </span>
             </div>
 
-            <!-- Sección de Sensores (repartidos en 4 columnas) -->
+            <!-- Sección de Sensores -->
             <div class="my-4 pt-4 border-t border-gray-200/50">
                 <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
                     <i class="fas fa-microchip mr-1 text-blue-500"></i> Sensores Asociados:
                 </h4>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {% for sensor in boya.sensores.all %}
-                        {% if sensor.tipo == 'temperatura' %}
-                        <div class="p-4 rounded-2xl bg-blue-50/90 border border-blue-200 shadow-sm flex flex-col justify-between relative group">
-                            <!-- Botón de borrar (Solo superusuario) -->
-                            {% if user.is_authenticated and user.is_superuser %}
-                            <a href="{% url 'eliminar_sensor' sensor.pk %}" 
-                               onclick="return confirm('¿Estás seguro de eliminar este sensor de temperatura?');" 
-                               class="absolute top-2.5 right-2.5 text-gray-400 hover:text-red-600 transition-colors p-1" 
-                               title="Eliminar sensor">
-                                <i class="fas fa-trash-alt text-xs"></i>
-                            </a>
-                            {% endif %}
+                        <div class="sensor-card p-4 rounded-2xl border shadow-sm flex flex-col justify-between relative group transition-all"
+                             data-sensor-id="{{ sensor.pk }}"
+                             data-tipo="{{ sensor.tipo }}"
+                             data-valor="{{ sensor.valor }}"
+                             data-min="{{ sensor.rango_min }}"
+                             data-max="{{ sensor.rango_max }}">
+                            
+                            <!-- Botones de Acción Superiores (Editar y Eliminar) -->
+                            {% if user.is_authenticated %}
+                            <div class="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
+                                <!-- Botón Editar/Configurar (visible para el dueño o superuser) -->
+                                {% if user.is_superuser or boya.propietario == user %}
+                                <a href="{% url 'editar_sensor' sensor.pk %}" 
+                                   class="text-gray-400 hover:text-blue-600 bg-white/80 hover:bg-white p-1.5 rounded-lg shadow-sm transition-colors" 
+                                   title="Configurar rangos del sensor">
+                                    <i class="fas fa-edit text-xs"></i>
+                                </a>
+                                {% endif %}
 
-                            <div class="flex items-center justify-between mb-2 pr-5">
-                                <div class="flex items-center text-blue-700 font-semibold text-sm">
-                                    <i class="fas fa-thermometer-half mr-2 text-blue-600"></i> Temperatura
-                                </div>
-                                <span class="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
-                                    {{ sensor.valor_actual|default:"24.5" }}°
-                                </span>
-                            </div>
-                            <div class="text-2xl font-bold text-blue-900 my-1">
-                                {{ sensor.valor_actual|default:"24.5" }}°C
-                            </div>
-                            <div class="w-full bg-blue-200/60 rounded-full h-2 my-2 overflow-hidden">
-                                <div class="bg-blue-600 h-full rounded-full" style="width: 65%;"></div>
-                            </div>
-                            <div class="text-[11px] text-blue-600 font-medium">Rango: 20-28°C</div>
-                        </div>
-                        {% elif sensor.tipo == 'ph' %}
-                        <div class="p-4 rounded-2xl bg-green-50/90 border border-green-200 shadow-sm flex flex-col justify-between relative group">
-                            {% if user.is_authenticated and user.is_superuser %}
-                            <a href="{% url 'eliminar_sensor' sensor.pk %}" 
-                               onclick="return confirm('¿Estás seguro de eliminar este sensor de pH?');" 
-                               class="absolute top-2.5 right-2.5 text-gray-400 hover:text-red-600 transition-colors p-1" 
-                               title="Eliminar sensor">
-                                <i class="fas fa-trash-alt text-xs"></i>
-                            </a>
-                            {% endif %}
-
-                            <div class="flex items-center justify-between mb-2 pr-5">
-                                <div class="flex items-center text-green-700 font-semibold text-sm">
-                                    <i class="fas fa-vial mr-2 text-green-600"></i> Nivel de pH
-                                </div>
-                                <span class="bg-green-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
-                                    {{ sensor.valor_actual|default:"7.2" }}
-                                </span>
-                            </div>
-                            <div class="text-2xl font-bold text-green-900 my-1">
-                                {{ sensor.valor_actual|default:"7.2" }}
-                            </div>
-                            <div class="w-full bg-green-200/60 rounded-full h-2 my-2 overflow-hidden">
-                                <div class="bg-green-500 h-full rounded-full" style="width: 70%;"></div>
-                            </div>
-                            <div class="text-[11px] text-green-600 font-medium">Rango: 6.5-8.0</div>
-                        </div>
-                        {% elif sensor.tipo == 'oxigeno' %}
-                        <div class="p-4 rounded-2xl bg-cyan-50/90 border border-cyan-200 shadow-sm flex flex-col justify-between relative group">
-                            {% if user.is_authenticated and user.is_superuser %}
-                            <a href="{% url 'eliminar_sensor' sensor.pk %}" 
-                               onclick="return confirm('¿Estás seguro de eliminar este sensor de oxígeno?');" 
-                               class="absolute top-2.5 right-2.5 text-gray-400 hover:text-red-600 transition-colors p-1" 
-                               title="Eliminar sensor">
-                                <i class="fas fa-trash-alt text-xs"></i>
-                            </a>
-                            {% endif %}
-
-                            <div class="flex items-center justify-between mb-2 pr-5">
-                                <div class="flex items-center text-cyan-700 font-semibold text-sm">
-                                    <i class="fas fa-wind mr-2 text-cyan-600"></i> Oxígeno
-                                </div>
-                                <span class="bg-cyan-600 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
-                                    {{ sensor.valor_actual|default:"8.1" }}
-                                </span>
-                            </div>
-                            <div class="text-2xl font-bold text-cyan-900 my-1">
-                                {{ sensor.valor_actual|default:"8.1" }} mg/L
-                            </div>
-                            <div class="w-full bg-cyan-200/60 rounded-full h-2 my-2 overflow-hidden">
-                                <div class="bg-cyan-500 h-full rounded-full" style="width: 60%;"></div>
-                            </div>
-                            <div class="text-[11px] text-cyan-600 font-medium">Rango: 6.0-12.0 mg/L</div>
-                        </div>
-                        {% elif sensor.tipo == 'turbidez' %}
-                        <div class="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 shadow-sm flex flex-col justify-between relative group">
-                            {% if user.is_authenticated and user.is_superuser %}
-                            <a href="{% url 'eliminar_sensor' sensor.pk %}" 
-                               onclick="return confirm('¿Estás seguro de eliminar este sensor de turbidez?');" 
-                               class="absolute top-2.5 right-2.5 text-gray-400 hover:text-red-600 transition-colors p-1" 
-                               title="Eliminar sensor">
-                                <i class="fas fa-trash-alt text-xs"></i>
-                            </a>
-                            {% endif %}
-
-                            <div class="flex items-center justify-between mb-2 pr-5">
-                                <div class="flex items-center text-amber-700 font-semibold text-sm">
-                                    <i class="fas fa-eye mr-2 text-amber-600"></i> Transparencia
-                                </div>
-                                <span class="bg-amber-500 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
-                                    {{ sensor.valor_actual|default:"85" }}%
-                                </span>
-                            </div>
-                            <div class="text-2xl font-bold text-amber-900 my-1">
-                                {{ sensor.valor_actual|default:"85" }}%
-                            </div>
-                            <div class="w-full bg-amber-200/60 rounded-full h-2 my-2 overflow-hidden">
-                                <div class="bg-amber-500 h-full rounded-full" style="width: 85%;"></div>
-                            </div>
-                            <div class="text-[11px] text-amber-600 font-medium">Rango: 70-95%</div>
-                        </div>
-                        {% else %}
-                        <div class="flex justify-between items-center text-sm bg-white/60 px-3 py-2 rounded-xl border border-white/40 relative group">
-                            <span class="text-gray-700 font-medium">
-                                {{ sensor.get_tipo_display }}
-                            </span>
-                            <div class="flex items-center gap-2">
-                                <span class="font-bold text-gray-900 bg-blue-50 px-2 py-0.5 rounded-md text-xs border border-blue-100">
-                                    {{ sensor.valor_actual }}
-                                </span>
-                                {% if user.is_authenticated and user.is_superuser %}
+                                <!-- Botón Eliminar (solo superuser) -->
+                                {% if user.is_superuser %}
                                 <a href="{% url 'eliminar_sensor' sensor.pk %}" 
                                    onclick="return confirm('¿Estás seguro de eliminar este sensor?');" 
-                                   class="text-gray-400 hover:text-red-600 transition-colors p-1" 
+                                   class="text-gray-400 hover:text-red-600 bg-white/80 hover:bg-white p-1.5 rounded-lg shadow-sm transition-colors" 
                                    title="Eliminar sensor">
                                     <i class="fas fa-trash-alt text-xs"></i>
                                 </a>
                                 {% endif %}
                             </div>
+                            {% endif %}
+
+                            <div class="flex items-center justify-between mb-2 pr-12">
+                                <div class="sensor-titulo flex items-center font-semibold text-sm">
+                                    <i class="fas fa-microchip mr-2"></i> {{ sensor.get_tipo_display }}
+                                </div>
+                                <span class="badge-estado text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm">
+                                    Normal
+                                </span>
+                            </div>
+                            
+                            <!-- Valor real del sensor -->
+                            <div class="sensor-valor text-2xl font-extrabold my-2 tracking-tight">
+                                {{ sensor.valor|default:"---" }}
+                            </div>
+
+                            <div class="w-full bg-gray-200/60 rounded-full h-2 my-2 overflow-hidden">
+                                <div class="bar-color h-full rounded-full transition-all" style="width: 100%;"></div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center text-[11px] font-medium">
+                                <span class="text-estado-txt">En línea</span>
+                                <span class="sensor-hora">{{ sensor.ultima_actualizacion|date:"H:i:s" }}</span>
+                            </div>
+
+                            <!-- Bloque de rangos min/max visible -->
+                            <div class="mt-3 pt-3 border-t border-gray-200/60 grid grid-cols-2 gap-2 text-[11px]">
+                                <div class="flex flex-col items-center bg-white/60 rounded-lg py-1.5 px-2">
+                                    <span class="text-gray-500 uppercase tracking-wider font-semibold">Mín</span>
+                                    <span class="rango-min-valor font-bold text-gray-800">{{ sensor.rango_min }}</span>
+                                </div>
+                                <div class="flex flex-col items-center bg-white/60 rounded-lg py-1.5 px-2">
+                                    <span class="text-gray-500 uppercase tracking-wider font-semibold">Máx</span>
+                                    <span class="rango-max-valor font-bold text-gray-800">{{ sensor.rango_max }}</span>
+                                </div>
+                            </div>
+
                         </div>
-                        {% endif %}
                     {% empty %}
                     <p class="col-span-full text-xs text-gray-400 italic">No hay sensores asociados a esta boya.</p>
                     {% endfor %}
@@ -187,11 +125,150 @@
             </span>
         </div>
     </div>
-    {% empty %}
-    <div class="col-span-full text-center py-12 glass-card rounded-2xl">
-        <i class="fas fa-broadcast-tower text-4xl text-gray-400 mb-3"></i>
-        <p class="text-gray-600 font-medium">No hay boyas registradas todavía.</p>
-    </div>
     {% endfor %}
 </div>
+
+<!-- SCRIPT DE TIEMPO REAL -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const coloresPorTipo = {
+        'temperatura': {
+            bg: 'bg-amber-50/90 border-amber-200', 
+            textoTitulo: 'text-amber-800', 
+            textoValor: 'text-amber-950', 
+            badgeBg: 'bg-amber-600', 
+            barraBg: 'bg-amber-500', 
+            subText: 'text-amber-700'
+        },
+        'ph': {
+            bg: 'bg-emerald-50/90 border-emerald-200', 
+            textoTitulo: 'text-emerald-800', 
+            textoValor: 'text-emerald-950', 
+            badgeBg: 'bg-emerald-600', 
+            barraBg: 'bg-emerald-500', 
+            subText: 'text-emerald-700'
+        },
+        'oxigeno': {
+            bg: 'bg-cyan-50/90 border-cyan-200', 
+            textoTitulo: 'text-cyan-800', 
+            textoValor: 'text-cyan-950', 
+            badgeBg: 'bg-cyan-600', 
+            barraBg: 'bg-cyan-500', 
+            subText: 'text-cyan-700'
+        },
+        'turbidez': {
+            bg: 'bg-purple-50/90 border-purple-200', 
+            textoTitulo: 'text-purple-800', 
+            textoValor: 'text-purple-950', 
+            badgeBg: 'bg-purple-600', 
+            barraBg: 'bg-purple-500', 
+            subText: 'text-purple-700'
+        }
+    };
+
+    function procesarTarjetas() {
+        const tarjetas = document.querySelectorAll('.sensor-card');
+
+        tarjetas.forEach(tarjeta => {
+            const tipoOriginal = tarjeta.getAttribute('data-tipo') || '';
+            const tipo = tipoOriginal.trim().toLowerCase();
+            
+            const valorStr = tarjeta.getAttribute('data-valor');
+            const min = parseFloat(tarjeta.getAttribute('data-min'));   // ← ahora respeta lo configurado
+            const max = parseFloat(tarjeta.getAttribute('data-max'));   // ← ahora respeta lo configurado
+            const valorNum = parseFloat(valorStr);
+
+            const elTitulo = tarjeta.querySelector('.sensor-titulo');
+            const elValor = tarjeta.querySelector('.sensor-valor');
+            const badge = tarjeta.querySelector('.badge-estado');
+            const barra = tarjeta.querySelector('.bar-color');
+            const txtEstado = tarjeta.querySelector('.text-estado-txt');
+            const elMin = tarjeta.querySelector('.rango-min-valor');
+            const elMax = tarjeta.querySelector('.rango-max-valor');
+
+            const tema = coloresPorTipo[tipo] || {
+                bg: 'bg-blue-50/90 border-blue-200',
+                textoTitulo: 'text-blue-800',
+                textoValor: 'text-blue-950',
+                badgeBg: 'bg-blue-600',
+                barraBg: 'bg-blue-500',
+                subText: 'text-blue-700'
+            };
+
+            if (isNaN(valorNum) || valorStr === 'Sin conexión' || valorStr === 'N/D') {
+                tarjeta.className = "sensor-card p-4 rounded-2xl border shadow-sm flex flex-col justify-between relative group transition-all bg-gray-100 border-gray-300 text-gray-500";
+                elTitulo.className = "sensor-titulo flex items-center font-semibold text-sm text-gray-500";
+                elValor.className = "sensor-valor text-2xl font-extrabold my-2 tracking-tight text-gray-600";
+                badge.className = "badge-estado bg-gray-400 text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm";
+                badge.textContent = "Sin Datos";
+                barra.style.width = "0%";
+                barra.className = "bar-color bg-gray-400 h-full rounded-full";
+                txtEstado.textContent = "Desconectado";
+                txtEstado.className = "text-estado-txt text-gray-500 font-medium";
+                if (elMin) elMin.className = "rango-min-valor font-bold text-gray-800";
+                if (elMax) elMax.className = "rango-max-valor font-bold text-gray-800";
+            } 
+            else if (valorNum < min || valorNum > max) {
+                tarjeta.className = "sensor-card p-4 rounded-2xl border-2 shadow-md flex flex-col justify-between relative group transition-all bg-red-100 border-red-500 animate-pulse";
+                elTitulo.className = "sensor-titulo flex items-center font-bold text-sm text-red-800";
+                elValor.className = "sensor-valor text-3xl font-black my-2 tracking-tight text-red-900";
+                badge.className = "badge-estado bg-red-600 text-white text-xs font-extrabold px-2.5 py-1 rounded-lg shadow-sm";
+                badge.textContent = "¡ALERTA!";
+                barra.className = "bar-color bg-red-600 h-full rounded-full";
+                txtEstado.textContent = valorNum < min ? `Bajo ( < ${min} )` : `Alto ( > ${max} )`;
+                txtEstado.className = "text-estado-txt text-red-700 font-bold";
+                if (elMin) elMin.className = `rango-min-valor font-bold ${valorNum < min ? 'text-red-600' : 'text-gray-800'}`;
+                if (elMax) elMax.className = `rango-max-valor font-bold ${valorNum > max ? 'text-red-600' : 'text-gray-800'}`;
+            } 
+            else {
+                tarjeta.className = `sensor-card p-4 rounded-2xl border shadow-sm flex flex-col justify-between relative group transition-all ${tema.bg}`;
+                elTitulo.className = `sensor-titulo flex items-center font-semibold text-sm ${tema.textoTitulo}`;
+                elValor.className = `sensor-valor text-2xl font-extrabold my-2 tracking-tight ${tema.textoValor}`;
+                badge.className = `badge-estado ${tema.badgeBg} text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm`;
+                badge.textContent = "Normal";
+                barra.className = `bar-color ${tema.barraBg} h-full rounded-full`;
+                txtEstado.className = `text-estado-txt ${tema.subText} font-medium`;
+                txtEstado.textContent = "En línea";
+                if (elMin) elMin.className = "rango-min-valor font-bold text-gray-800";
+                if (elMax) elMax.className = "rango-max-valor font-bold text-gray-800";
+            }
+        });
+    }
+
+    procesarTarjetas();
+
+    function actualizarDatosEnTiempoReal() {
+        fetch("{% url 'api_boyas' %}")
+            .then(response => response.json())
+            .then(data => {
+                data.boyas.forEach(boya => {
+                    boya.sensores.forEach(sensor => {
+                        const tarjeta = document.querySelector(`.sensor-card[data-sensor-id="${sensor.id}"]`);
+                        if (tarjeta) {
+                            tarjeta.setAttribute('data-valor', sensor.valor);
+                            tarjeta.setAttribute('data-min', sensor.rango_min);
+                            tarjeta.setAttribute('data-max', sensor.rango_max);
+
+                            const elValor = tarjeta.querySelector('.sensor-valor');
+                            if (elValor) elValor.textContent = sensor.valor;
+
+                            const elHora = tarjeta.querySelector('.sensor-hora');
+                            if (elHora) elHora.textContent = sensor.ultima_actualizacion;
+
+                            const elMin = tarjeta.querySelector('.rango-min-valor');
+                            if (elMin) elMin.textContent = sensor.rango_min;
+
+                            const elMax = tarjeta.querySelector('.rango-max-valor');
+                            if (elMax) elMax.textContent = sensor.rango_max;
+                        }
+                    });
+                });
+                procesarTarjetas();
+            })
+            .catch(error => console.error("Error al actualizar en tiempo real:", error));
+    }
+
+    setInterval(actualizarDatosEnTiempoReal, 5000);
+});
+</script>
 {% endblock %}

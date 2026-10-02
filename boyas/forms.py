@@ -1,7 +1,4 @@
 from django import forms
-from .models import Boya
-
-from django import forms
 from .models import Boya, Sensor
 
 class BoyaForm(forms.ModelForm):
@@ -25,15 +22,25 @@ class BoyaForm(forms.ModelForm):
             }),
         }
 
+
+
 class SensorForm(forms.ModelForm):
     class Meta:
         model = Sensor
-        fields = ['boya', 'tipo']
+        fields = ['boya', 'tipo', 'rango_min', 'rango_max']
         widgets = {
             'boya': forms.Select(attrs={
                 'class': 'w-full px-4 py-2.5 bg-white/60 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800'
             }),
             'tipo': forms.Select(attrs={
+                'class': 'w-full px-4 py-2.5 bg-white/60 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800'
+            }),
+            'rango_min': forms.NumberInput(attrs={
+                'step': '0.01',
+                'class': 'w-full px-4 py-2.5 bg-white/60 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800'
+            }),
+            'rango_max': forms.NumberInput(attrs={
+                'step': '0.01',
                 'class': 'w-full px-4 py-2.5 bg-white/60 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800'
             }),
         }
