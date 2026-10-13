@@ -4,7 +4,14 @@ from .models import Boya, Sensor
 class BoyaForm(forms.ModelForm):
     class Meta:
         model = Boya
-        fields = ['nombre', 'ubicacion', 'activa', 'propietario']
+        fields = ['nombre', 'ubicacion', 'serial_number', 'activa', 'propietario']
+        labels = {
+            'nombre': 'Nombre de la Boya',
+            'ubicacion': 'Ubicación',
+            'serial_number': 'Número de Serie (Hardware)',
+            'activa': 'Dispositivo activo',
+            'propietario': 'Propietario asignado',
+        }
         widgets = {
             'nombre': forms.TextInput(attrs={
                 'class': 'w-full px-4 py-2.5 bg-white/60 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800',
@@ -13,6 +20,10 @@ class BoyaForm(forms.ModelForm):
             'ubicacion': forms.TextInput(attrs={
                 'class': 'w-full px-4 py-2.5 bg-white/60 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800',
                 'placeholder': 'Ej: Sector Norte - Muelle 4'
+            }),
+            'serial_number': forms.TextInput(attrs={
+                'class': 'w-full px-4 py-2.5 bg-white/60 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800',
+                'placeholder': 'Numero del dispositivo'
             }),
             'activa': forms.CheckboxInput(attrs={
                 'class': 'w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500'
